@@ -474,6 +474,19 @@ const handleSubmit = async () => {
 
         submitting.value = true
 
+        // 在提交前确保获取最新的菜单权限数据
+        if (menuTreeRef.value) {
+            const checkedKeys = menuTreeRef.value.getCheckedKeys()
+            roleForm.menuPermissions = checkedKeys
+        }
+
+        // 确保 menuPermissions 不是 null
+        if (!roleForm.menuPermissions) {
+            roleForm.menuPermissions = []
+        }
+
+        console.log('提交的角色数据:', JSON.parse(JSON.stringify(roleForm))) // 调试用
+
         if (isEdit.value) {
             await updateRole(roleForm.id, roleForm)
             ElMessage.success('更新成功')
@@ -491,6 +504,7 @@ const handleSubmit = async () => {
         submitting.value = false
     }
 }
+
 
 // 关闭对话框
 const handleDialogClose = () => {

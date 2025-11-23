@@ -32,7 +32,6 @@ const routes = [
             {
                 path: 'role',
                 component: roleManagement,
-                // component: () => import('@/views/system/RoleManagement.vue'),
                 meta: { title: '角色管理', requiresAuth: true }
             },
             {
