@@ -2,7 +2,7 @@
     <el-card class="welcome-card">
         <template #header>
             <div class="card-header">
-                <span>欢迎使用管理系统</span>
+                <span>欢迎使用RBAC管理系统</span>
             </div>
         </template>
 

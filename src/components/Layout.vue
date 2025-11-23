@@ -3,7 +3,7 @@
         <!-- 侧边栏 -->
         <el-aside :width="isCollapse ? '64px' : '200px'" class="sidebar">
             <div class="logo">
-                <span v-if="!isCollapse">管理系统</span>
+                <span v-if="!isCollapse">RBAC管理系统</span>
                 <span v-else>M</span>
             </div>
             <el-menu
