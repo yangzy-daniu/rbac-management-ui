@@ -48,7 +48,7 @@
                 <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
                 <el-table-column prop="menuPermissions" label="菜单权限" min-width="200" show-overflow-tooltip>
                     <template #default="scope">
-                        {{ scope.row.menuPermissions ? scope.row.menuPermissions.join(', ') : '-' }}
+                        {{ getMenuNames(scope.row.menuPermissions) }}
                     </template>
                 </el-table-column>
                 <el-table-column prop="createTime" label="创建时间" width="180">
@@ -287,30 +287,66 @@ const loadRoles = async () => {
     }
 }
 
+// 获取菜单名称
+const getMenuNames = (menuPermissions) => {
+    if (!menuPermissions || menuPermissions.length === 0) {
+        return '-'
+    }
+
+    const names = menuPermissions.map(permission => {
+        return menuMap.value.get(permission) || permission
+    })
+
+    // 缩略显示，最多显示3个，超过用...表示
+    if (names.length <= 3) {
+        return names.join(', ')
+    } else {
+        return names.slice(0, 3).join(', ') + `... 等${names.length}个菜单`
+    }
+}
+
+// 菜单映射，用于快速查找菜单名称
+const menuMap = ref(new Map())
+
 // 加载菜单数据
 const loadMenus = async () => {
     try {
         const response = await getAllMenus()
-        // 构建树形结构
         const menus = response.data
         const menuMap = new Map()
         const tree = []
 
-        // 首先将所有菜单放入map
+        // 首先创建所有菜单节点的映射
         menus.forEach(menu => {
-            menuMap.set(menu.id, { ...menu, children: [] })
+            menuMap.set(menu.id, {
+                id: menu.id,
+                code: menu.id, // 使用 id 作为 node-key
+                name: menu.name,
+                children: []
+            })
         })
+
         // 构建树形结构
         menus.forEach(menu => {
             const menuNode = menuMap.get(menu.id)
+
             if (menu.parentId && menuMap.has(menu.parentId)) {
+                // 有父菜单，添加到父菜单的children中
+                // const parentMenu = menuMap.get(menu.parentId)
+                // if (!parentMenu.children) {
+                //     parentMenu.children = []
+                // }
+                // parentMenu.children.push(menuNode)
                 menuMap.get(menu.parentId).children.push(menuNode)
+
             } else {
+                // 没有父菜单，作为根节点
                 tree.push(menuNode)
             }
         })
 
         menuTreeData.value = tree
+
     } catch (error) {
         console.error('加载菜单数据失败:', error)
         ElMessage.error('加载菜单数据失败')
@@ -339,7 +375,6 @@ const handleAdd = async () => {
 }
 
 // 编辑角色
-// 在 RoleManagement.vue 的 handleEdit 方法中，修改为：
 const handleEdit = async (row) => {
     isEdit.value = true
     await loadMenus()
