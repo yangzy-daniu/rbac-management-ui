@@ -254,11 +254,9 @@ const getMenuList = async () => {
             // 如果有搜索条件，调用搜索API
             response = await searchMenus(queryParams.name)
         } else {
-            // 否则获取所有菜单
+            // 否则获取菜单树，这里会自动使用角色权限过滤
             response = await getMenuTree()
         }
-        // 使用统一的API调用方式
-        // const response = await getMenus()
         menuList.value = response.data
 
     } catch (error) {
