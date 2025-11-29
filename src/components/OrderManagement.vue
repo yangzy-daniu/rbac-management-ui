@@ -20,7 +20,7 @@
                     <el-input v-model="searchForm.customer" placeholder="请输入客户名称" clearable />
                 </el-form-item>
                 <el-form-item label="状态">
-                    <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
+                    <el-select v-model="searchForm.status" placeholder="请选择状态" clearable style="width: 120px">
                         <el-option label="待支付" value="pending" />
                         <el-option label="已支付" value="paid" />
                         <el-option label="已发货" value="shipped" />
@@ -41,7 +41,7 @@
             </el-form>
 
             <!-- 订单表格 -->
-            <el-table :data="orderList" v-loading="loading" stripe>
+            <el-table :data="orderList" v-loading="loading" stripe style="width: 100%" table-layout="auto" :header-cell-style="{ 'text-align': 'center' }" >
                 <el-table-column prop="orderNo" label="订单号" width="180" />
                 <el-table-column prop="customer" label="客户" width="120" />
                 <el-table-column prop="amount" label="金额" width="100" align="right">
@@ -56,27 +56,33 @@
                         </el-tag>
                     </template>
                 </el-table-column>
-                <el-table-column prop="createTime" label="创建时间" width="180" />
-                <el-table-column prop="productCount" label="商品数量" width="100" align="center" />
-                <el-table-column label="操作" width="200" fixed="right">
+                <el-table-column prop="createTime" label="创建时间" width="180">
                     <template #default="{ row }">
-                        <el-button size="small" @click="handleView(row)">查看</el-button>
-                        <el-button
-                                size="small"
-                                type="primary"
-                                @click="handleEdit(row)"
-                                v-if="hasPermission('order:edit')"
-                        >
-                            编辑
-                        </el-button>
-                        <el-button
-                                size="small"
-                                type="danger"
-                                @click="handleDelete(row.id)"
-                                v-if="hasPermission('order:delete')"
-                        >
-                            删除
-                        </el-button>
+                        {{ formatDateTime(row.createTime) }}
+                    </template>
+                </el-table-column>
+                <el-table-column prop="productCount" label="商品数量" width="100" align="center" />
+                <el-table-column label="操作" width="180" fixed="right">
+                    <template #default="{ row }">
+                        <div style="display:flex;gap:4px;">
+                            <el-button size="small" @click="handleView(row)">查看</el-button>
+                            <el-button
+                                    size="small"
+                                    type="primary"
+                                    @click="handleEdit(row)"
+                                    v-if="hasPermission('order:edit')"
+                            >
+                                编辑
+                            </el-button>
+                            <el-button
+                                    size="small"
+                                    type="danger"
+                                    @click="handleDelete(row.id)"
+                                    v-if="hasPermission('order:delete')"
+                            >
+                                删除
+                            </el-button>
+                        </div>
                     </template>
                 </el-table-column>
             </el-table>
@@ -102,6 +108,125 @@
                 @refresh="loadOrders"
         />
     </div>
+    <!-- 新建订单对话框 -->
+    <el-dialog
+            v-model="createVisible"
+            title="新建订单"
+            width="720px"
+            :before-close="handleCreateClose"
+    >
+        <el-form :model="editForm" :rules="editRules" ref="createFormRef" label-width="80px">
+            <el-form-item label="客户" prop="customer">
+                <el-input v-model="editForm.customer" placeholder="请输入客户名称" />
+            </el-form-item>
+            <el-form-item label="备注">
+                <el-input v-model="editForm.remark" type="textarea" placeholder="请输入订单备注" />
+            </el-form-item>
+
+            <el-form-item label="商品信息">
+                <div class="product-list">
+                    <div v-for="(item, index) in editForm.items" :key="index" class="product-item">
+                        <el-row :gutter="10">
+                            <el-col :span="8">
+                                <el-form-item :prop="`items[${index}].productName`" :rules="{ required: true, message: '请输入商品名称', trigger: 'blur' }">
+                                    <el-input v-model="item.productName" placeholder="商品名称" />
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="5">                  <!-- 价格输入框列宽由4改为5 -->
+                                <el-form-item :prop="`items[${index}].price`" :rules="{ required: true, message: '请输入价格', trigger: 'blur' }">
+                                    <el-input-number v-model="item.price" :min="0" :precision="2" placeholder="价格" style="width:100%" />
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="5">                  <!-- 数量输入框列宽由4改为5 -->
+                                <el-form-item :prop="`items[${index}].quantity`" :rules="{ required: true, message: '请输入数量', trigger: 'blur' }">
+                                    <el-input-number v-model="item.quantity" :min="1" placeholder="数量" style="width:100%" />
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="4">
+                            <el-input v-model="item.description" placeholder="商品描述" />
+                            </el-col>
+                            <el-col :span="2">
+                                <el-button type="danger" @click="removeProductItem(index)" :disabled="editForm.items.length === 1">
+                                    <el-icon><Delete /></el-icon>
+                                </el-button>
+                            </el-col>
+                        </el-row>
+                    </div>
+                </div>
+                <el-button type="primary" @click="addProductItem" class="add-product-btn">
+                    <el-icon><Plus /></el-icon>
+                    添加商品
+                </el-button>
+            </el-form-item>
+        </el-form>
+
+        <template #footer>
+            <el-button @click="handleCreateClose">取消</el-button>
+            <el-button type="primary" @click="submitCreateOrder" :loading="creating">
+                创建订单
+            </el-button>
+        </template>
+    </el-dialog>
+
+    <!-- 编辑订单对话框 -->
+    <el-dialog
+            v-model="editVisible"
+            title="编辑订单"
+            width="720px"
+            :before-close="handleEditClose"
+    >
+        <el-form :model="editForm" :rules="editRules" ref="editFormRef" label-width="80px">
+            <el-form-item label="客户" prop="customer">
+                <el-input v-model="editForm.customer" placeholder="请输入客户名称" />
+            </el-form-item>
+            <el-form-item label="备注">
+                <el-input v-model="editForm.remark" type="textarea" placeholder="请输入订单备注" />
+            </el-form-item>
+
+            <el-form-item label="商品信息">
+                <div class="product-list">
+                    <div v-for="(item, index) in editForm.items" :key="index" class="product-item">
+                        <el-row :gutter="10">
+                            <el-col :span="8">
+                                <el-form-item :prop="`items[${index}].productName`" :rules="{ required: true, message: '请输入商品名称', trigger: 'blur' }">
+                                    <el-input v-model="item.productName" placeholder="商品名称" />
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="5">
+                                <el-form-item :prop="`items[${index}].price`" :rules="{ required: true, message: '请输入价格', trigger: 'blur' }">
+                                    <el-input-number v-model="item.price" :min="0" :precision="2" placeholder="价格" style="width:100%" />
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="5">
+                                <el-form-item :prop="`items[${index}].quantity`" :rules="{ required: true, message: '请输入数量', trigger: 'blur' }">
+                                    <el-input-number v-model="item.quantity" :min="1" placeholder="数量" style="width:100%" />
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="4">
+                                <el-input v-model="item.description" placeholder="商品描述" />
+                            </el-col>
+                            <el-col :span="2">
+                                <el-button type="danger" @click="removeProductItem(index)" :disabled="editForm.items.length === 1">
+                                    <el-icon><Delete /></el-icon>
+                                </el-button>
+                            </el-col>
+                        </el-row>
+                    </div>
+                </div>
+                <el-button type="primary" @click="addProductItem" class="add-product-btn">
+                    <el-icon><Plus /></el-icon>
+                    添加商品
+                </el-button>
+            </el-form-item>
+        </el-form>
+
+        <template #footer>
+            <el-button @click="handleEditClose">取消</el-button>
+            <el-button type="primary" @click="submitEditOrder" :loading="editing">
+                更新订单
+            </el-button>
+        </template>
+    </el-dialog>
 </template>
 
 <script setup>
@@ -109,33 +234,23 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Refresh } from '@element-plus/icons-vue'
 import OrderDetailDialog from './OrderDetailDialog.vue'
-
-// 模拟数据
-const mockOrders = [
-    {
-        id: 1,
-        orderNo: 'ORD202401010001',
-        customer: '张三',
-        amount: 2999.00,
-        status: 'paid',
-        createTime: '2024-01-01 10:00:00',
-        productCount: 2
-    },
-    {
-        id: 2,
-        orderNo: 'ORD202401010002',
-        customer: '李四',
-        amount: 1599.50,
-        status: 'pending',
-        createTime: '2024-01-01 11:30:00',
-        productCount: 1
-    }
-]
+import { Delete } from '@element-plus/icons-vue'
+import {
+    listOrderByPage,
+    createOrder,
+    updateOrder,
+    deleteOrder,
+    getOrderDetail
+} from '@/api/order'
 
 const loading = ref(false)
 const orderList = ref([])
 const detailVisible = ref(false)
 const selectedOrderId = ref(null)
+
+const createVisible = ref(false)
+const creating = ref(false)
+const createFormRef = ref()
 
 const searchForm = reactive({
     orderNo: '',
@@ -152,41 +267,91 @@ const pagination = reactive({
 // 权限检查
 const hasPermission = (permission) => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
-    return userInfo.role === 'admin' || userInfo.role === 'super'
+
+    debugger;
+    // 超级管理员和管理员拥有所有权限
+    if (userInfo.roleName === 'super' || userInfo.roleName === 'admin') {
+        return true
+    }
+
+    // 其他角色根据实际权限列表检查
+    const userPermissions = userInfo.permissions || []
+    return userPermissions.includes(permission)
 }
 
+const editForm = reactive({
+    customer: '',
+    remark: '',
+    items: [
+        {
+            productName: '',
+            price: 0,
+            quantity: 1,
+            description: ''
+        }
+    ]
+})
+
+const editRules = {
+    customer: [
+        { required: true, message: '请输入客户名称', trigger: 'blur' }
+    ]
+}
+
+// 加载订单数据 - 调用后端API
 const loadOrders = async () => {
     loading.value = true
     try {
-        // 模拟API调用
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // 构建查询参数
+        const params = new URLSearchParams()
+        if (searchForm.orderNo) params.append('orderNo', searchForm.orderNo)
+        if (searchForm.customer) params.append('customer', searchForm.customer)
+        if (searchForm.status) params.append('status', searchForm.status)
+        params.append('page', pagination.currentPage)
+        params.append('size', pagination.pageSize)
 
-        // 过滤数据
-        let filteredOrders = [...mockOrders]
-        if (searchForm.orderNo) {
-            filteredOrders = filteredOrders.filter(order =>
-                    order.orderNo.includes(searchForm.orderNo)
-            )
-        }
-        if (searchForm.customer) {
-            filteredOrders = filteredOrders.filter(order =>
-                    order.customer.includes(searchForm.customer)
-            )
-        }
-        if (searchForm.status) {
-            filteredOrders = filteredOrders.filter(order =>
-                    order.status === searchForm.status
-            )
+        const response = await listOrderByPage(params)
+        // 检查HTTP状态码
+        if (response.status !== 200) {
+            throw new Error(`HTTP ${response.status}: 获取订单列表失败`)
         }
 
-        orderList.value = filteredOrders
-        pagination.total = filteredOrders.length
+        orderList.value = response.data.content
+        pagination.total = response.data.totalElements
+
     } catch (error) {
         console.error('加载订单失败:', error)
         ElMessage.error('加载订单失败')
+        // 失败时使用模拟数据作为fallback
+        orderList.value = getMockOrders()
+        pagination.total = orderList.value.length
     } finally {
         loading.value = false
     }
+}
+
+// 模拟数据作为fallback
+const getMockOrders = () => {
+    return [
+        {
+            id: 1,
+            orderNo: 'ORD202401010001',
+            customer: '张三',
+            amount: 2999.00,
+            status: 'paid',
+            createTime: '2024-01-01 10:00:00',
+            productCount: 2
+        },
+        {
+            id: 2,
+            orderNo: 'ORD202401010002',
+            customer: '李四',
+            amount: 1599.50,
+            status: 'pending',
+            createTime: '2024-01-01 11:30:00',
+            productCount: 1
+        }
+    ]
 }
 
 const handleSearch = () => {
@@ -204,7 +369,56 @@ const resetSearch = () => {
 }
 
 const handleCreate = () => {
-    ElMessage.info('新建订单功能开发中...')
+    createVisible.value = true
+}
+
+const handleCreateClose = () => {
+    createVisible.value = false
+    resetEditForm();
+}
+
+const addProductItem = () => {
+    editForm.items.push({
+        productName: '',
+        price: 0,
+        quantity: 1,
+        description: ''
+    })
+}
+
+const removeProductItem = (index) => {
+    if (editForm.items.length > 1) {
+        editForm.items.splice(index, 1)
+    }
+}
+
+const submitCreateOrder = async () => {
+    if (!createFormRef.value) return
+
+    try {
+        await createFormRef.value.validate()
+        creating.value = true
+
+        // 调用后端API创建订单
+        const response = await createOrder(editForm)
+
+        // 检查HTTP状态码
+        if (response.status == 200) {
+            ElMessage.success('订单创建成功')
+            // 确保创建成功后关闭弹窗
+            createVisible.value = false
+            handleCreateClose()
+            await loadOrders()
+        } else {
+            throw new Error('创建订单失败')
+        }
+
+    } catch (error) {
+        console.error('创建订单失败:', error)
+        ElMessage.error('创建订单失败')
+    } finally {
+        creating.value = false
+    }
 }
 
 const handleView = (row) => {
@@ -212,17 +426,138 @@ const handleView = (row) => {
     detailVisible.value = true
 }
 
-const handleEdit = (row) => {
-    ElMessage.info(`编辑订单: ${row.orderNo}`)
+// 编辑订单相关
+const editVisible = ref(false)
+const editing = ref(false)
+const editFormRef = ref()
+const editingOrderId = ref(null)
+
+
+const handleEdit = async (row) => {
+    try {
+        loading.value = true
+        editingOrderId.value = row.id
+
+        // 调用获取订单详情接口
+        const response = await getOrderDetail(row.id)
+
+        if (response.status === 200) {
+            const orderDetail = response.data
+
+            // 填充编辑表单数据，使用接口返回的完整数据
+            Object.assign(editForm, {
+                customer: orderDetail.customer,
+                remark: orderDetail.remark || '',
+                items: orderDetail.items && orderDetail.items.length > 0
+                        ? orderDetail.items.map(item => ({
+                            productName: item.productName || '',
+                            price: item.price || 0,
+                            quantity: item.quantity || 1,
+                            description: item.description || ''
+                        }))
+                        : [
+                            {
+                                productName: '',
+                                price: 0,
+                                quantity: 1,
+                                description: ''
+                            }
+                        ]
+            })
+            editVisible.value = true
+        } else {
+            throw new Error('获取订单详情失败')
+        }
+    } catch (error) {
+        console.error('获取订单详情失败:', error)
+        ElMessage.error('获取订单详情失败，无法编辑')
+        // 失败时使用列表中的基本信息
+        Object.assign(editForm, {
+            customer: row.customer,
+            remark: row.remark || '',
+            items: [
+                {
+                    productName: '',
+                    price: 0,
+                    quantity: 1,
+                    description: ''
+                }
+            ]
+        })
+        editVisible.value = true
+    } finally {
+        loading.value = false
+    }
+}
+
+const submitEditOrder = async () => {
+    if (!editFormRef.value) return
+
+    try {
+        await editFormRef.value.validate()
+        editing.value = true
+
+        // 调用后端API更新订单
+        const response = await updateOrder(editingOrderId.value, editForm)
+
+        // 检查HTTP状态码
+        if (response.status === 200) {
+            ElMessage.success('订单更新成功')
+            handleEditClose()
+            await loadOrders()
+        } else {
+            throw new Error('更新订单失败')
+        }
+
+    } catch (error) {
+        console.error('更新订单失败:', error)
+        ElMessage.error('更新订单失败')
+    } finally {
+        editing.value = false
+    }
+}
+
+const resetEditForm = () => {
+    editFormRef.value?.resetFields()
+    Object.assign(editForm, {
+        customer: '',
+        remark: '',
+        items: [
+            {
+                productName: '',
+                price: 0,
+                quantity: 1,
+                description: ''
+            }
+        ]
+    })
+    editingOrderId.value = null
+}
+
+const handleEditClose = () => {
+    editVisible.value = false
+    resetEditForm()
 }
 
 const handleDelete = async (id) => {
     try {
         await ElMessageBox.confirm('确定删除该订单吗？', '提示', { type: 'warning' })
-        ElMessage.success('删除成功')
-        loadOrders()
+
+        // 调用后端API删除订单
+        const response = await deleteOrder(id)
+
+        // 检查HTTP状态码
+        if (response.status === 200) {
+            ElMessage.success('删除成功')
+            await loadOrders()
+        } else {
+            throw new Error('删除订单失败')
+        }
     } catch (error) {
-        // 用户取消
+        if (error !== 'cancel') {
+            console.error('删除订单失败:', error)
+            ElMessage.error('删除订单失败')
+        }
     }
 }
 
@@ -246,6 +581,12 @@ const getStatusText = (status) => {
         cancelled: '已取消'
     }
     return textMap[status] || '未知'
+}
+
+// 格式化日期时间，移除T字符
+const formatDateTime = (dateTimeStr) => {
+    if (!dateTimeStr) return ''
+    return dateTimeStr.replace('T', ' ').replace(/\.\d+/, '')
 }
 
 const handleSizeChange = (size) => {
@@ -283,4 +624,20 @@ onMounted(() => {
     justify-content: flex-end;
     margin-top: 20px;
 }
+
+.product-list {
+    margin-bottom: 10px;
+}
+
+.product-item {
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid #e4e7ed;
+    border-radius: 4px;
+}
+
+.add-product-btn {
+    width: 100%;
+}
+
 </style>
