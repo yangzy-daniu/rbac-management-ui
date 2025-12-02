@@ -17,11 +17,11 @@
                 <div class="user-info">
                     <div class="avatar-section">
                         <el-avatar :size="80" :src="userInfo.avatar">
-                            {{ userInfo.nickname?.charAt(0) || 'U' }}
+                            {{ getAvatarText }}
                         </el-avatar>
                         <div class="user-details">
-                            <h3>{{ userInfo.nickname || userInfo.username }}</h3>
-                            <p>{{ userInfo.position }} - {{ userInfo.department }}</p>
+                            <h3>{{ displayName }}</h3>
+                            <p>{{ userInfo.roleName || userInfo.roleCode || '用户' }} - {{ userInfo.department || '未设置部门' }}</p>
                         </div>
                     </div>
 
@@ -33,6 +33,10 @@
                             <span>{{ userInfo.username }}</span>
                         </div>
                         <div class="info-item">
+                            <label>姓名:</label>
+                            <span>{{ userInfo.name || '未设置' }}</span>
+                        </div>
+                        <div class="info-item">
                             <label>邮箱:</label>
                             <span>{{ userInfo.email || '未设置' }}</span>
                         </div>
@@ -41,8 +45,20 @@
                             <span>{{ userInfo.phone || '未设置' }}</span>
                         </div>
                         <div class="info-item">
+                            <label>部门:</label>
+                            <span>{{ userInfo.department || '未设置' }}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>职位:</label>
+                            <span>{{ userInfo.position || '未设置' }}</span>
+                        </div>
+                        <div class="info-item">
                             <label>用户ID:</label>
                             <span>{{ userInfo.id }}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>角色:</label>
+                            <span>{{ userInfo.roleName || userInfo.roleCode || '用户' }}</span>
                         </div>
                     </div>
                 </div>
@@ -59,6 +75,10 @@
                 <el-form :model="profileForm" label-width="80px">
                     <el-form-item label="昵称">
                         <el-input v-model="profileForm.nickname" placeholder="请输入昵称" />
+                    </el-form-item>
+
+                    <el-form-item label="姓名">
+                        <el-input v-model="profileForm.name" placeholder="请输入姓名" />
                     </el-form-item>
 
                     <el-form-item label="邮箱">
@@ -78,7 +98,9 @@
                     </el-form-item>
 
                     <el-form-item>
-                        <el-button type="primary" @click="updateProfile">保存更改</el-button>
+                        <el-button type="primary" @click="updateProfile" :loading="updating">
+                            保存更改
+                        </el-button>
                         <el-button @click="resetForm">重置</el-button>
                     </el-form-item>
                 </el-form>
@@ -94,19 +116,24 @@
 
                 <el-form :model="passwordForm" label-width="100px">
                     <el-form-item label="当前密码">
-                        <el-input v-model="passwordForm.oldPassword" type="password" show-password />
+                        <el-input v-model="passwordForm.oldPassword" type="password" show-password
+                                  placeholder="请输入当前密码" />
                     </el-form-item>
 
                     <el-form-item label="新密码">
-                        <el-input v-model="passwordForm.newPassword" type="password" show-password />
+                        <el-input v-model="passwordForm.newPassword" type="password" show-password
+                                  placeholder="请输入新密码" />
                     </el-form-item>
 
                     <el-form-item label="确认密码">
-                        <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
+                        <el-input v-model="passwordForm.confirmPassword" type="password" show-password
+                                  placeholder="请再次输入新密码" />
                     </el-form-item>
 
                     <el-form-item>
-                        <el-button type="primary" @click="changePassword">修改密码</el-button>
+                        <el-button type="primary" @click="changePassword" :loading="changingPassword">
+                            修改密码
+                        </el-button>
                     </el-form-item>
                 </el-form>
             </el-card>
@@ -115,8 +142,9 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { userApi } from '@/api/profile.js'
 
 export default {
     name: 'ProfilePage',
@@ -124,19 +152,23 @@ export default {
     setup() {
         // 用户信息
         const userInfo = ref({
-            id: 1,
-            username: 'admin',
-            nickname: '系统管理员',
-            email: 'admin@example.com',
-            phone: '13800138000',
-            department: '技术部',
-            position: '系统管理员',
+            id: '',
+            username: '',
+            name: '',
+            nickname: '',
+            email: '',
+            phone: '',
+            department: '',
+            position: '',
+            roleCode: '',
+            roleName: '',
             avatar: ''
         })
 
         // 表单数据
         const profileForm = reactive({
             nickname: '',
+            name: '',
             email: '',
             phone: '',
             department: '',
@@ -149,29 +181,84 @@ export default {
             confirmPassword: ''
         })
 
-        // 初始化数据
+        // 加载状态
+        const updating = ref(false)
+        const changingPassword = ref(false)
+
+        // 计算属性
+        const displayName = computed(() => {
+            return userInfo.value.nickname || userInfo.value.name || userInfo.value.username
+        })
+
+        const getAvatarText = computed(() => {
+            const name = displayName.value
+            return name ? name.charAt(0).toUpperCase() : 'U'
+        })
+
+        // 从后端获取用户信息
+        const fetchUserInfo = async () => {
+            try {
+                const response = await userApi.getProfile()
+                if (response.data) {
+                    userInfo.value = response.data
+                    initData()
+                }
+            } catch (error) {
+                console.error('获取用户信息失败:', error)
+                ElMessage.error('获取用户信息失败')
+            }
+        }
+
+        // 初始化表单数据
         const initData = () => {
-            profileForm.nickname = userInfo.value.nickname
-            profileForm.email = userInfo.value.email
-            profileForm.phone = userInfo.value.phone
-            profileForm.department = userInfo.value.department
-            profileForm.position = userInfo.value.position
+            profileForm.nickname = userInfo.value.nickname || ''
+            profileForm.name = userInfo.value.name || ''
+            profileForm.email = userInfo.value.email || ''
+            profileForm.phone = userInfo.value.phone || ''
+            profileForm.department = userInfo.value.department || ''
+            profileForm.position = userInfo.value.position || ''
         }
 
         // 更新资料
-        const updateProfile = () => {
-            // 更新用户信息
-            userInfo.value.nickname = profileForm.nickname
-            userInfo.value.email = profileForm.email
-            userInfo.value.phone = profileForm.phone
-            userInfo.value.department = profileForm.department
-            userInfo.value.position = profileForm.position
+        const updateProfile = async () => {
+            // 简单验证
+            if (!profileForm.name && !profileForm.nickname) {
+                ElMessage.warning('请至少填写姓名或昵称')
+                return
+            }
 
-            ElMessage.success('资料更新成功')
+            updating.value = true
+            try {
+                const response = await userApi.updateProfile({
+                    nickname: profileForm.nickname,
+                    name: profileForm.name,
+                    email: profileForm.email,
+                    phone: profileForm.phone,
+                    department: profileForm.department,
+                    position: profileForm.position
+                })
+
+                if (response.data && response.data.success) {
+                    userInfo.value = response.data.data
+                    ElMessage.success(response.data.message || '资料更新成功')
+                } else {
+                    ElMessage.error(response.data?.message || '资料更新失败')
+                }
+            } catch (error) {
+                console.error('更新资料失败:', error)
+                ElMessage.error(error.response?.data?.message || '更新资料失败')
+            } finally {
+                updating.value = false
+            }
         }
 
         // 修改密码
-        const changePassword = () => {
+        const changePassword = async () => {
+            if (!passwordForm.oldPassword) {
+                ElMessage.warning('请输入当前密码')
+                return
+            }
+
             if (passwordForm.newPassword !== passwordForm.confirmPassword) {
                 ElMessage.error('两次输入的密码不一致')
                 return
@@ -182,13 +269,29 @@ export default {
                 return
             }
 
-            // 模拟密码修改
-            ElMessage.success('密码修改成功')
+            changingPassword.value = true
+            try {
+                const response = await userApi.changePassword({
+                    oldPassword: passwordForm.oldPassword,
+                    newPassword: passwordForm.newPassword,
+                    confirmPassword: passwordForm.confirmPassword
+                })
 
-            // 清空密码表单
-            passwordForm.oldPassword = ''
-            passwordForm.newPassword = ''
-            passwordForm.confirmPassword = ''
+                if (response.data && response.data.success) {
+                    ElMessage.success(response.data.message || '密码修改成功')
+                    // 清空密码表单
+                    passwordForm.oldPassword = ''
+                    passwordForm.newPassword = ''
+                    passwordForm.confirmPassword = ''
+                } else {
+                    ElMessage.error(response.data?.message || '密码修改失败')
+                }
+            } catch (error) {
+                console.error('修改密码失败:', error)
+                ElMessage.error(error.response?.data?.message || '修改密码失败')
+            } finally {
+                changingPassword.value = false
+            }
         }
 
         // 重置表单
@@ -198,13 +301,17 @@ export default {
 
         // 生命周期
         onMounted(() => {
-            initData()
+            fetchUserInfo()
         })
 
         return {
             userInfo,
             profileForm,
             passwordForm,
+            updating,
+            changingPassword,
+            displayName,
+            getAvatarText,
             updateProfile,
             changePassword,
             resetForm

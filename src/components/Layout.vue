@@ -256,8 +256,8 @@ const handleCommand = async (command) => {
             // 用户取消退出
         }
     } else if (command === 'profile') {
-        // 跳转到个人信息页面
-        ElMessage.info('个人信息功能开发中...')
+        // 跳转到个人中心页面
+        await router.push('/profile')
     }
 }
 

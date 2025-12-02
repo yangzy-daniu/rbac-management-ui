@@ -1,4 +1,3 @@
-// api/user.js
 import request from './request'
 
 export const userApi = {
