@@ -2,9 +2,67 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Login from '@/components/Login.vue'
 import Layout from '@/components/Layout.vue'
 import Home from '@/components/Home.vue'
-import userManagement from '@/components/UserManagement.vue'
-import menuManagement from '@/components/MenuManagement.vue'
-import roleManagement from '@/components/RoleManagement.vue'
+import { recordAccess } from '@/api/recent'
+import { getMenuConfig } from '@/api/menu'
+
+let configLoaded = false
+// 定义菜单配置
+let menuConfig = {}
+// 加载菜单配置
+async function loadMenuConfig() {
+    try {
+        const token = localStorage.getItem('token')
+        if (!token) {
+            console.log('未登录，跳过菜单配置加载')
+            return
+        }
+
+        const response = await getMenuConfig()
+        menuConfig = response.data || {}
+        configLoaded = true
+        console.log('菜单配置加载成功:', menuConfig)
+    } catch (error) {
+        console.error('加载菜单配置失败:', error)
+        // 使用默认配置作为fallback
+        menuConfig = getDefaultMenuConfig()
+    }
+}
+
+// 默认配置（作为fallback）
+function getDefaultMenuConfig() {
+    return {
+        '/workstation': {
+            name: '工作台',
+            icon: 'Monitor',
+            type: 'MENU'
+        },
+        '/user': {
+            name: '用户管理',
+            icon: 'User',
+            type: 'MENU'
+        },
+        '/order': {
+            name: '订单处理',
+            icon: 'ShoppingCart',
+            type: 'MENU'
+        },
+        '/dashboard': {
+            name: '数据分析',
+            icon: 'TrendCharts',
+            type: 'MENU'
+        },
+        '/system': {
+            name: '系统设置',
+            icon: 'Setting',
+            type: 'MENU'
+        },
+        '/analysis': {
+            name: '系统分析',
+            icon: 'TrendCharts',
+            type: 'MENU'
+        }
+    }
+}
 
 const routes = [
     {
@@ -62,18 +120,19 @@ const routes = [
             {
                 path: '/user',
                 name: 'userManagement',
-                component: userManagement,
+                component: () => import('../components/UserManagement.vue'),
                 meta: { title: '用户管理', icon: 'User' }
             },
             {
                 path: '/role',
-                component: roleManagement,
+                name: 'roleManagement',
+                component: () => import('../components/RoleManagement.vue'),
                 meta: { title: '角色管理', icon: 'Key', requiresAuth: true }
             },
             {
                 path: '/menu',
                 name: 'menuManagement',
-                component: menuManagement,
+                component: () => import('../components/MenuManagement.vue'),
                 meta: { title: '菜单管理', icon: 'Menu' }
             },
             {
@@ -110,7 +169,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
     const token = localStorage.getItem('token')
 
     if (to.path === '/login') {
@@ -123,9 +182,34 @@ router.beforeEach((to, from, next) => {
         if (!token) {
             next('/login')
         } else {
+            // 登录状态下，确保菜单配置已加载
+            if (!configLoaded && to.path !== '/home') {
+                try {
+                    await loadMenuConfig()
+                } catch (error) {
+                    console.error('加载菜单配置失败:', error)
+                }
+            }
             next()
         }
     }
+    // 获取菜单配置
+    const menuInfo = menuConfig[to.path]
+
+    if (menuInfo) {
+        // 记录访问（异步，不影响路由跳转）
+        recordAccess({
+            menuName: menuInfo.name || to.meta?.title || to.name,
+            menuPath: to.path,
+            menuIcon: menuInfo.icon,
+            menuType: menuInfo.type || 'MENU'
+        }).catch(error => {
+            console.error('记录访问历史失败:', error)
+            // 记录失败不影响路由跳转
+        })
+    }
+
+    next()
 })
 
 export default router

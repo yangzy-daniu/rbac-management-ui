@@ -268,7 +268,6 @@ const pagination = reactive({
 const hasPermission = (permission) => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
 
-    debugger;
     // 超级管理员和管理员拥有所有权限
     if (userInfo.roleName === 'super' || userInfo.roleName === 'admin') {
         return true
