@@ -21,3 +21,34 @@ export const analysisApi = {
         return request.get('/analysis/recent-access')
     }
 }
+export function getAnalysisStats(timeRange = '7d') {
+    return request({
+        url: '/analysis/stats2',
+        method: 'get',
+        params: { timeRange }
+    })
+}
+
+export function getTrendData(timeRange = '7d') {
+    return request({
+        url: '/analysis/trend',
+        method: 'get',
+        params: { timeRange }
+    })
+}
+
+export function getBehaviorData(timeRange = '7d') {
+    return request({
+        url: '/analysis/behavior',
+        method: 'get',
+        params: { timeRange }
+    })
+}
+
+export function getRetentionData(timeRange = '7d') {
+    return request({
+        url: '/analysis/retention',
+        method: 'get',
+        params: { timeRange }
+    })
+}

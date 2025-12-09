@@ -55,9 +55,9 @@
                         <div class="stats-info">
                             <div class="stats-value">{{ formatNumber(stats.totalUsers) }}</div>
                             <div class="stats-label">总用户数</div>
-                            <div class="stats-change" :class="getChangeClass(stats.userGrowth)">
-                                <el-icon><Top v-if="stats.userGrowth >= 0" /><Bottom v-else /></el-icon>
-                                {{ Math.abs(stats.userGrowth) }}%
+                            <div class="stats-change" :class="getChangeClass(stats.userGrowthRate)">
+                                <el-icon><Top v-if="stats.userGrowthRate >= 0" /><Bottom v-else /></el-icon>
+                                {{ Math.abs(stats.userGrowthRate) }}%
                             </div>
                         </div>
                     </div>
@@ -73,9 +73,9 @@
                         <div class="stats-info">
                             <div class="stats-value">{{ formatNumber(stats.activeUsers) }}</div>
                             <div class="stats-label">活跃用户</div>
-                            <div class="stats-change" :class="getChangeClass(stats.activeGrowth)">
-                                <el-icon><Top v-if="stats.activeGrowth >= 0" /><Bottom v-else /></el-icon>
-                                {{ Math.abs(stats.activeGrowth) }}%
+                            <div class="stats-change" :class="getChangeClass(stats.activeGrowthRate)">
+                                <el-icon><Top v-if="stats.activeGrowthRate >= 0" /><Bottom v-else /></el-icon>
+                                {{ Math.abs(stats.activeGrowthRate) }}%
                             </div>
                         </div>
                     </div>
@@ -86,14 +86,14 @@
                 <el-card class="stats-card" shadow="hover">
                     <div class="stats-content">
                         <div class="stats-icon order-icon">
-                            <el-icon><ShoppingCart /></el-icon>
+                            <el-icon><MessageBox /></el-icon> <!-- 更换图标 -->
                         </div>
                         <div class="stats-info">
-                            <div class="stats-value">{{ formatNumber(stats.totalOrders) }}</div>
-                            <div class="stats-label">总订单数</div>
-                            <div class="stats-change" :class="getChangeClass(stats.orderGrowth)">
-                                <el-icon><Top v-if="stats.orderGrowth >= 0" /><Bottom v-else /></el-icon>
-                                {{ Math.abs(stats.orderGrowth) }}%
+                            <div class="stats-value">{{ formatNumber(stats.sessionCount) }}</div>
+                            <div class="stats-label">会话次数</div> <!-- 修改标签 -->
+                            <div class="stats-change" :class="getChangeClass(stats.sessionGrowthRate)">
+                                <el-icon><Top v-if="stats.sessionGrowthRate >= 0" /><Bottom v-else /></el-icon>
+                                {{ Math.abs(stats.sessionGrowthRate) }}%
                             </div>
                         </div>
                     </div>
@@ -107,12 +107,12 @@
                             <el-icon><TrendCharts /></el-icon>
                         </div>
                         <div class="stats-info">
-                            <div class="stats-value">{{ formatNumber(stats.totalRevenue) }}%</div>
+                            <div class="stats-value">{{ formatNumber(stats.overallGrowthRate) }}%</div>
                             <div class="stats-label">增长率</div>
-                            <div class="stats-change" :class="getChangeClass(stats.growth)">
-                                <el-icon><Top v-if="stats.growth >= 0" /><Bottom v-else /></el-icon>
-                                {{ Math.abs(stats.growth) }}%
-                            </div>
+<!--                            <div class="stats-change" :class="getChangeClass(stats.overallGrowthRate)">-->
+<!--                                <el-icon><Top v-if="stats.overallGrowthRate >= 0" /><Bottom v-else /></el-icon>-->
+<!--                                {{ Math.abs(stats.overallGrowthRate) }}%-->
+<!--                            </div>-->
                         </div>
                     </div>
                 </el-card>
@@ -351,9 +351,16 @@ import {
     Top,
     Bottom,
     Download,
-    Refresh
+    Refresh,
+    MessageBox
 } from '@element-plus/icons-vue'
 import { getRecentLogs } from '@/api/operationLog'
+import {
+    getAnalysisStats,
+    getTrendData,
+    getBehaviorData,
+    getRetentionData
+} from '@/api/analysis'
 
 const router = useRouter()
 
@@ -380,10 +387,10 @@ const stats = ref({
     totalUsers: 1234,
     activeUsers: 892,
     totalOrders: 5678,
-    totalRevenue: 23.5,
-    userGrowth: 12.5,
-    activeGrowth: 8.3,
-    orderGrowth: 15.2,
+    overallGrowthRate: 23.5,
+    userGrowthRate: 12.5,
+    activeGrowthRate: 8.3,
+    sessionGrowthRate: 15.2,
     growth: -2.1,
     todayLogins: 156,
     weekActiveUsers: 892,
@@ -473,10 +480,51 @@ watch(timeRange, () => {
     loadData()
 })
 
+watch(trendType, () => {
+    updateTrendChart()
+})
+
 // 加载数据
 const loadData = async () => {
     tableLoading.value = true
     try {
+        // 并行加载所有数据
+        const [statsRes, trendRes, behaviorRes, retentionRes] = await Promise.all([
+            getAnalysisStats(timeRange.value),
+            getTrendData(timeRange.value),
+            getBehaviorData(timeRange.value),
+            getRetentionData(timeRange.value)
+        ])
+
+        // 更新统计数据
+        stats.value = {
+            // 指标数值
+            totalUsers: statsRes.data.totalUsers,
+            activeUsers: statsRes.data.activeUsers,
+            sessionCount: statsRes.data.sessionCount,
+
+            // 各个增长率
+            userGrowthRate: statsRes.data.userGrowth,      // 用户增长率
+            activeGrowthRate: statsRes.data.activeGrowth,  // 活跃用户增长率
+            sessionGrowthRate: statsRes.data.sessionGrowth, // 会话增长率
+
+            // 综合增长率
+            overallGrowthRate: statsRes.data.growthRate,
+
+            // 其他数据
+            todayLogins: statsRes.data.todayLogins,
+            weekActiveUsers: statsRes.data.weekActiveUsers,
+            avgSessionTime: statsRes.data.avgSessionTime
+        }
+
+        // 更新图表数据
+        trendData.value = trendRes.data
+        behaviorData.value = behaviorRes.data
+        retentionData.value = retentionRes.data
+
+        // 更新图表
+        updateAllCharts()
+
         // 获取最近访问记录
         const response = await getRecentLogs()
         accessLogs.value = response.data.map(log => ({
@@ -504,7 +552,17 @@ const loadData = async () => {
         tableLoading.value = false
     }
 }
+// 更新所有图表
+const updateAllCharts = () => {
+    updateTrendChart()
+    updateBehaviorChart()
+    updateRetentionChart()
+}
 
+// 添加图表数据
+const trendData = ref([])
+const behaviorData = ref([])
+const retentionData = ref([])
 // 初始化图表
 const initCharts = () => {
     nextTick(() => {
@@ -527,6 +585,13 @@ const initBehaviorChart = () => {
     if (!behaviorChart.value) return
 
     behaviorChartInstance = echarts.init(behaviorChart.value)
+    updateBehaviorChart()
+}
+// 更新行为分布图表（优化布局）
+// 修改 updateBehaviorChart 方法
+const updateBehaviorChart = () => {
+    if (!behaviorChartInstance || behaviorData.value.length === 0) return;
+
     const option = {
         tooltip: {
             trigger: 'item',
@@ -534,43 +599,72 @@ const initBehaviorChart = () => {
         },
         legend: {
             orient: 'vertical',
-            right: 10,
-            top: 'center'
+            right: 10, // 减小右边距
+            top: 'middle', // 垂直居中
+            height: '80%', // 限制图例高度
+            itemGap: 10, // 减小图例项间距
+            itemWidth: 12,
+            itemHeight: 12,
+            textStyle: {
+                fontSize: 12,
+                color: '#606266'
+            },
+            formatter: function (name) {
+                const item = behaviorData.value.find(d => d.name === name)
+                if (item) {
+                    const total = behaviorData.value.reduce((sum, d) => sum + d.value, 0)
+                    const percentage = ((item.value / total) * 100).toFixed(1)
+                    // 限制名称长度，防止过长
+                    const displayName = name.length > 6 ? name.substring(0, 5) + '...' : name
+                    return `${displayName} ${percentage}%`
+                }
+                return name
+            }
         },
         series: [{
             name: '用户行为',
             type: 'pie',
-            radius: ['40%', '70%'],
-            avoidLabelOverlap: false,
+            radius: ['30%', '55%'], // 减小半径
+            center: ['30%', '50%'], // 饼图向左移动
+            avoidLabelOverlap: true, // 启用避免标签重叠
             itemStyle: {
-                borderRadius: 10,
+                borderRadius: 6,
                 borderColor: '#fff',
-                borderWidth: 2
+                borderWidth: 2,
+                color: (params) => {
+                    const item = behaviorData.value[params.dataIndex]
+                    return item ? item.color : '#999999'
+                }
             },
             label: {
-                show: false,
+                show: false, // 关闭饼图上的标签
                 position: 'center'
             },
             emphasis: {
                 label: {
-                    show: true,
-                    fontSize: 18,
-                    fontWeight: 'bold'
-                }
+                    show: false // 关闭高亮时的标签
+                },
+                scale: true,
+                scaleSize: 8
             },
             labelLine: {
                 show: false
             },
-            data: [
-                { value: 335, name: '页面浏览' },
-                { value: 310, name: '按钮点击' },
-                { value: 234, name: '表单提交' },
-                { value: 135, name: '文件下载' },
-                { value: 154, name: '其他操作' }
-            ]
-        }]
-    }
-    behaviorChartInstance.setOption(option)
+            data: behaviorData.value.map(item => ({
+                name: item.name,
+                value: item.value
+            }))
+        }],
+        // 移除中间的文本图形，因为空间不够
+        graphic: []
+    };
+
+    behaviorChartInstance.setOption(option, true);
+
+    // 添加响应式调整
+    setTimeout(() => {
+        behaviorChartInstance.resize();
+    }, 100);
 }
 
 // 初始化用户留存率图表
@@ -578,87 +672,140 @@ const initRetentionChart = () => {
     if (!retentionChart.value) return
 
     retentionChartInstance = echarts.init(retentionChart.value)
+    updateRetentionChart()
+}
+const updateRetentionChart = () => {
+    if (!retentionChartInstance || retentionData.value.length === 0) return
+
     const option = {
         tooltip: {
-            trigger: 'axis'
+            trigger: 'axis',
+            formatter: (params) => {
+                let result = params[0].name + '<br/>'
+                params.forEach(param => {
+                    result += `${param.marker} ${param.seriesName}: ${param.value}%<br/>`
+                })
+                return result
+            }
         },
         legend: {
-            data: ['次日留存', '7日留存', '30日留存']
+            data: ['次日留存', '7日留存', '30日留存'],
+            right: 20,
+            top: 10,
+            itemGap: 12,
+            itemWidth: 12,
+            itemHeight: 12
         },
         grid: {
             left: '3%',
             right: '4%',
-            bottom: '3%',
+            bottom: '12%',
+            top: '20%',
             containLabel: true
         },
         xAxis: {
             type: 'category',
-            data: ['1月', '2月', '3月', '4月', '5月', '6月']
+            data: retentionData.value.map(item => item.period),
+            axisLabel: {
+                interval: 0
+            }
         },
         yAxis: {
             type: 'value',
             name: '留存率(%)',
-            max: 100
+            max: 100,
+            axisLabel: {
+                formatter: '{value}%'
+            }
         },
         series: [
             {
                 name: '次日留存',
                 type: 'line',
                 smooth: true,
-                data: [45, 52, 48, 55, 58, 62],
-                itemStyle: { color: '#5470c6' }
+                data: retentionData.value.map(item => item.retention1Day),
+                itemStyle: { color: '#5470c6' },
+                lineStyle: {
+                    width: 3
+                },
+                symbolSize: 8
             },
             {
                 name: '7日留存',
                 type: 'line',
                 smooth: true,
-                data: [35, 42, 38, 45, 48, 52],
-                itemStyle: { color: '#91cc75' }
+                data: retentionData.value.map(item => item.retention7Day),
+                itemStyle: { color: '#91cc75' },
+                lineStyle: {
+                    width: 3
+                },
+                symbolSize: 8
             },
             {
                 name: '30日留存',
                 type: 'line',
                 smooth: true,
-                data: [25, 32, 28, 35, 38, 42],
-                itemStyle: { color: '#fac858' }
+                data: retentionData.value.map(item => item.retention30Day),
+                itemStyle: { color: '#fac858' },
+                lineStyle: {
+                    width: 3
+                },
+                symbolSize: 8
             }
         ]
     }
-    retentionChartInstance.setOption(option)
+
+    retentionChartInstance.setOption(option, true)
 }
 
 // 更新趋势图表
 const updateTrendChart = () => {
-    if (!trendChartInstance) return
+    if (!trendChartInstance || trendData.value.length === 0) return
 
-    const dates = generateDates(timeRange.value)
+    const dates = trendData.value.map(item => item.date)
     const option = {
         tooltip: {
-            trigger: 'axis'
+            trigger: 'axis',
+            axisPointer: {
+                type: 'cross'
+            }
         },
         legend: {
-            data: ['访问次数', '用户数量', '平均响应时间']
+            data: ['访问次数', '用户数量', '平均响应时间'],
+            right: 10,
+            top: 10
         },
         grid: {
             left: '3%',
             right: '4%',
-            bottom: '3%',
+            bottom: '12%', // 增加底部间距
+            top: '20%',    // 增加顶部间距
             containLabel: true
         },
         xAxis: {
             type: 'category',
             boundaryGap: false,
-            data: dates
+            data: dates,
+            axisLabel: {
+                interval: Math.max(1, Math.floor(dates.length / 10)) // 避免标签重叠
+            }
         },
         yAxis: [
             {
                 type: 'value',
-                name: '数量'
+                name: '数量',
+                position: 'left',
+                axisLine: {
+                    show: true
+                }
             },
             {
                 type: 'value',
                 name: '时间(ms)',
-                position: 'right'
+                position: 'right',
+                axisLine: {
+                    show: true
+                }
             }
         ],
         series: [
@@ -666,8 +813,11 @@ const updateTrendChart = () => {
                 name: '访问次数',
                 type: 'line',
                 smooth: true,
-                data: generateRandomData(dates.length, 100, 300),
+                data: trendData.value.map(item => item.visitCount),
                 itemStyle: { color: '#5470c6' },
+                lineStyle: {
+                    width: 3
+                },
                 areaStyle: {
                     color: {
                         type: 'linear',
@@ -683,16 +833,23 @@ const updateTrendChart = () => {
                 name: '用户数量',
                 type: 'line',
                 smooth: true,
-                data: generateRandomData(dates.length, 50, 150),
-                itemStyle: { color: '#91cc75' }
+                data: trendData.value.map(item => item.userCount),
+                itemStyle: { color: '#91cc75' },
+                lineStyle: {
+                    width: 3
+                }
             },
             {
                 name: '平均响应时间',
                 type: 'line',
                 yAxisIndex: 1,
                 smooth: true,
-                data: generateRandomData(dates.length, 30, 80),
-                itemStyle: { color: '#fac858' }
+                data: trendData.value.map(item => item.avgResponseTime),
+                itemStyle: { color: '#fac858' },
+                lineStyle: {
+                    width: 3,
+                    type: 'dashed' // 使用虚线区分
+                }
             }
         ]
     }
@@ -701,12 +858,19 @@ const updateTrendChart = () => {
     if (trendType.value === 'visit') {
         option.series[1].show = false
         option.series[2].show = false
+        option.legend.data = ['访问次数']
     } else if (trendType.value === 'user') {
         option.series[0].show = false
         option.series[2].show = false
+        option.legend.data = ['用户数量']
+    } else {
+        option.series[0].show = true
+        option.series[1].show = true
+        option.series[2].show = true
+        option.legend.data = ['访问次数', '用户数量', '平均响应时间']
     }
 
-    trendChartInstance.setOption(option)
+    trendChartInstance.setOption(option, true)
 }
 
 // 更新所有图表
@@ -733,9 +897,11 @@ const generateRandomData = (count, min, max) => {
 }
 
 const formatNumber = (num) => {
+    if (num === undefined || num === null) {
+        return '0' // 或者 return '--' 表示无数据
+    }
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
-
 const formatDateTime = (date) => {
     return new Date(date).toLocaleString('zh-CN')
 }
