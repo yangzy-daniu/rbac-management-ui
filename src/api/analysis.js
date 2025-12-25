@@ -1,6 +1,8 @@
 import request from './request'
 
+// 统计分析API
 export const getRecentActions = () => request.get('/analysis/recent-actions')
+
 export const getQuickStats = () => request.get('/analysis/quick-stats')
 
 export function getAnalysisStats(timeRange = '7d') {
